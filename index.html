@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAGR计算器</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      h1,
+      h2 {
+        text-align: center;
+        color: #444;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        background-color: white;
+        box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+      }
+
+      label {
+        display: block;
+        font-weight: bold;
+        margin-top: 20px;
+      }
+
+      input[type="text"],
+      input[type="date"],
+      select,
+      button {
+        width: 100%;
+        padding: 12px;
+        margin-top: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+
+      input[type="text"]:focus,
+      input[type="date"]:focus,
+      select:focus,
+      button:focus {
+        border-color: #007bff;
+        outline: none;
+        box-shadow: 0px 0px 5px rgba(0, 123, 255, 0.5);
+      }
+
+      button {
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        margin-top: 20px;
+      }
+
+      button:hover {
+        background-color: #0056b3;
+      }
+
+      #result {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #28a745;
+        margin-top: 20px;
+      }
+
+      .value-info {
+        font-size: 1.1em;
+        color: #555;
+        margin-top: 10px;
+        text-align: center;
+      }
+
+      .result-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .result-values {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>CAGR 计算器</h1>
+
+      <label for="symbol">股票代码或加密货币:</label>
+      <select id="symbol" required>
+        <option value="BTC-USD">BTC-USD</option>
+        <option value="BRK-A">Berkshire Hathaway</option>
+        <option value="NDXKX">NASDAQ-100</option>
+      </select>
+
+      <label for="start-date">开始日期:</label>
+      <input type="date" id="start-date" value="2017-12-19" required />
+
+      <label for="end-date">结束日期:</label>
+      <input type="date" id="end-date" required />
+
+      <button onclick="calculateCAGR()">计算年化收益率</button>
+
+      <div class="result-container">
+        <div class="value-info" id="start-info"></div>
+        <div class="value-info" id="end-info"></div>
+        <div class="result-values">
+          <h2>结果:</h2>
+          <h2><span id="result"></span></h2>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const API_KEY = "EX4Z9VOCBQYM4T2S"; // 申请到的 Alpha Vantage API 密钥
+
+      // 设置默认的结束日期为今天
+      window.onload = function () {
+        const today = new Date().toISOString().split("T")[0];
+        document.getElementById("end-date").value = today;
+      };
+
+      async function fetchStockData(symbol) {
+        let url;
+
+        if (symbol === "BTC-USD") {
+          url = `https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey=${API_KEY}`;
+        } else {
+          url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${API_KEY}&outputsize=full`;
+        }
+        console.log("Fetching data for URL:", url);
+
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+          console.log("Fetched data:", data);
+          return data;
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          return null;
+        }
+      }
+
+      function findClosestDate(data, targetDate) {
+        const dates = Object.keys(data).sort(
+          (a, b) => new Date(a) - new Date(b)
+        );
+        let closestDate = dates[0];
+        dates.forEach((date) => {
+          if (new Date(date) <= new Date(targetDate)) {
+            closestDate = date;
+          }
+        });
+        return closestDate;
+      }
+
+      async function calculateCAGR() {
+        const symbol = document.getElementById("symbol").value;
+        const startDate = document.getElementById("start-date").value;
+        const endDateInput = document.getElementById("end-date").value;
+
+        console.log(
+          "Input values - Symbol:",
+          symbol,
+          "Start Date:",
+          startDate,
+          "End Date Input:",
+          endDateInput
+        );
+
+        if (!symbol || !startDate || !endDateInput) {
+          alert("请填写所有字段！");
+          return;
+        }
+
+        try {
+          const data = await fetchStockData(symbol);
+          if (!data) {
+            alert("无法获取数据。确保股票代码正确且 API 调用未达到限制。");
+            return;
+          }
+
+          let startValue,
+            endValue,
+            closestStartDate,
+            closestEndDate,
+            timeSeries;
+
+          if (symbol === "BTC-USD") {
+            timeSeries = data["Time Series (Digital Currency Daily)"];
+
+            closestStartDate = findClosestDate(timeSeries, startDate);
+            closestEndDate = findClosestDate(timeSeries, endDateInput);
+
+            startValue = timeSeries[closestStartDate]["4. close"];
+            endValue = timeSeries[closestEndDate]["4. close"];
+          } else {
+            const today = new Date().toISOString().split("T")[0];
+            const endDateAPI = data["Meta Data"]["3. Last Refreshed"];
+            console.log("Resolved End Date from API:", endDateAPI);
+
+            let endDate =
+              new Date(endDateAPI) <= new Date(today)
+                ? endDateAPI
+                : endDateInput;
+            console.log("Used End Date:", endDate);
+
+            timeSeries = data["Time Series (Daily)"];
+            closestStartDate = findClosestDate(timeSeries, startDate);
+            closestEndDate = findClosestDate(timeSeries, endDate);
+
+            startValue = timeSeries[closestStartDate]["4. close"];
+            endValue = timeSeries[closestEndDate]["4. close"];
+          }
+
+          console.log(
+            "Closest Start Date:",
+            closestStartDate,
+            "Start Value:",
+            startValue
+          );
+          console.log(
+            "Closest End Date:",
+            closestEndDate,
+            "End Value:",
+            endValue
+          );
+
+          if (!startValue || !endValue) {
+            alert("无法获取数据。确保日期范围内的股票数据存在。");
+            return;
+          }
+
+          // 显示实际选取的日期和数值
+          document.getElementById(
+            "start-info"
+          ).innerText = `开始日期: ${closestStartDate}, 起始值: ${startValue}`;
+          document.getElementById(
+            "end-info"
+          ).innerText = `结束日期: ${closestEndDate}, 结束值: ${endValue}`;
+
+          // 时间差值（以年为单位）
+          const years =
+            (new Date(closestEndDate) - new Date(closestStartDate)) /
+            (1000 * 60 * 60 * 24 * 365.25);
+
+          console.log("Number of years:", years);
+
+          // 计算 CAGR
+          const cagr = (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
+          console.log("Calculated CAGR:", cagr);
+
+          // 显示结果
+          document.getElementById("result").innerText = cagr.toFixed(2) + "%";
+        } catch (error) {
+          alert("获取数据时发生错误：" + error.message);
+        }
+      }
+    </script>
+  </body>
+</html>
