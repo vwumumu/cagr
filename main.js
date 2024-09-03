@@ -1,5 +1,4 @@
-const config = require('./config');
-
+const config = require("./config");
 
 window.onload = function () {
   const today = new Date().toISOString().split("T")[0];
